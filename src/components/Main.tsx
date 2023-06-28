@@ -23,30 +23,16 @@ const getChainName = (chainId: number) => {
 };
 
 const getTokenName = (chainId: number) => {
-    return supportedChains.find((chain) => chain.id === chainId)?.nativeCurrency
-        .symbol;
+    return supportedChains.find((chain) => chain.id === chainId)?.nativeCurrency.symbol;
 };
 
 const isUserOpSupported = (chainId: number) => {
-    return (
-        getChainName(chainId) === "Goerli" ||
-        getChainName(chainId) === "Optimism Goerli" ||
-        getChainName(chainId) === "Polygon Mumbai"
-        // getChainName(chainId) === "Sepolia"
-    );
+    return getChainName(chainId) === "Goerli" || getChainName(chainId) === "Optimism Goerli" || getChainName(chainId) === "Polygon Mumbai";
 };
 
 export const Main = () => {
-    const {
-        status,
-        isLoading,
-        formData,
-        swapDetails,
-        handleChange,
-        sendCloseSwapTransaction,
-        sendOpenSwapTransaction,
-        sendCloseSwapUserOp,
-    } = useContext(TransactionContext);
+    const { status, isLoading, formData, swapDetails, handleChange, sendCloseSwapTransaction, sendOpenSwapTransaction, sendCloseSwapUserOp } =
+        useContext(TransactionContext);
 
     const handleSubmit = (e: any) => {
         if (!isLoading) {
@@ -75,9 +61,7 @@ export const Main = () => {
                                 className={style.transferPropInput}
                                 placeholder="0x..."
                                 value={formData.recipient}
-                                onChange={(e) =>
-                                    handleChange(e.target.value, "recipient")
-                                }
+                                onChange={(e) => handleChange(e.target.value, "recipient")}
                             />
                         </div>
                         <div className={style.formHeader}>
@@ -85,19 +69,9 @@ export const Main = () => {
                         </div>
                         <Chains />
                         {isLoading ? (
-                            <div className={style.swapPassed}>
-                                Swap (pending)
-                            </div>
+                            <div className={style.swapPassed}>Swap (pending)</div>
                         ) : (
-                            <button
-                                disabled={
-                                    isLoading || !formData.recipient
-                                        ? true
-                                        : false
-                                }
-                                onClick={(e) => handleSubmit(e)}
-                                className={style.swapButton}
-                            >
+                            <button disabled={isLoading || !formData.recipient ? true : false} onClick={(e) => handleSubmit(e)} className={style.swapButton}>
                                 Swap
                             </button>
                         )}
@@ -112,67 +86,42 @@ export const Main = () => {
                             <div>Value</div>
                         </div>
                         <div className={style.transferPropContainer}>
-                            <div className={style.transferPropInput2}>
-                                {swapDetails.value.toString() +
-                                    " " +
-                                    getTokenName(swapDetails.sendingChainID)}
-                            </div>
+                            <div className={style.transferPropInput2}>{swapDetails.value.toString() + " " + getTokenName(swapDetails.sendingChainID)}</div>
                         </div>
 
                         <div className={style.formHeader}>
                             <div>Chain</div>
                         </div>
                         <div className={style.transferPropContainer}>
-                            <div className={style.transferPropInput2}>
-                                {getChainName(swapDetails.sendingChainID)}
-                            </div>
+                            <div className={style.transferPropInput2}>{getChainName(swapDetails.sendingChainID)}</div>
                         </div>
 
                         <div className={style.formHeader}>
                             <div>Expiration time</div>
                         </div>
                         <div className={style.transferPropContainer}>
-                            <div className={style.transferPropInput2}>
-                                {new Date(
-                                    swapDetails.originalSwapTimestamp * 1000
-                                ).toUTCString()}
-                            </div>
+                            <div className={style.transferPropInput2}>{new Date(swapDetails.originalSwapTimestamp * 1000).toUTCString()}</div>
                         </div>
 
                         <div className={style.formHeader}>
                             <div>To</div>
                         </div>
                         <div className={style.transferPropContainer}>
-                            <div className={style.transferPropInput2}>
-                                {swapDetails.recipient}
-                            </div>
+                            <div className={style.transferPropInput2}>{swapDetails.recipient}</div>
                         </div>
 
                         <div className={style.formHeader}>
-                            <a
-                                href={swapDetails.originalTransactionLink}
-                                target="_blank"
-                            >
+                            <a href={swapDetails.originalTransactionLink} target="_blank">
                                 Swap ID
                             </a>
                         </div>
                         <div className={style.transferPropContainer}>
-                            <Link
-                                className={style.transferPropInput2}
-                                target="_blank"
-                                href={swapDetails.originalTransactionLink}
-                            >
-                                {swapDetails.originalSwapID}
+                            <Link className={style.transferPropInput2} target="_blank" href={swapDetails.originalTransactionLink}>
+                                {"0x..." + swapDetails.originalSwapID.slice(-40)}
                             </Link>
                         </div>
-                        {status === "open" && (
-                            <div className={style.swapPassed}>
-                                Swap Opened (waiting for mirror swap)
-                            </div>
-                        )}
-                        {status !== "open" && (
-                            <div className={style.swapPassed}>Swap Opened</div>
-                        )}
+                        {status === "open" && <div className={style.swapPassed}>Swap Opened (waiting for mirror swap)</div>}
+                        {status !== "open" && <div className={style.swapPassed}>Swap Opened</div>}
                     </Card>
                 </>
             )}
@@ -184,98 +133,60 @@ export const Main = () => {
                             <div>Value</div>
                         </div>
                         <div className={style.transferPropContainer}>
-                            <div className={style.transferPropInput2}>
-                                {swapDetails.value.toString() +
-                                    " " +
-                                    getTokenName(swapDetails.receivingChainID)}
-                            </div>
+                            <div className={style.transferPropInput2}>{swapDetails.value.toString() + " " + getTokenName(swapDetails.receivingChainID)}</div>
                         </div>
 
                         <div className={style.formHeader}>
                             <div>Chain</div>
                         </div>
                         <div className={style.transferPropContainer}>
-                            <div className={style.transferPropInput2}>
-                                {getChainName(swapDetails.receivingChainID)}
-                            </div>
+                            <div className={style.transferPropInput2}>{getChainName(swapDetails.receivingChainID)}</div>
                         </div>
 
                         <div className={style.formHeader}>
                             <div>Expiration time</div>
                         </div>
                         <div className={style.transferPropContainer}>
-                            <div className={style.transferPropInput2}>
-                                {new Date(
-                                    swapDetails.mirrorSwapTimestamp * 1000
-                                ).toUTCString()}
-                            </div>
+                            <div className={style.transferPropInput2}>{new Date(swapDetails.mirrorSwapTimestamp * 1000).toUTCString()}</div>
                         </div>
 
                         <div className={style.formHeader}>
                             <div>To</div>
                         </div>
                         <div className={style.transferPropContainer}>
-                            <div className={style.transferPropInput2}>
-                                {swapDetails.recipient}
-                            </div>
+                            <div className={style.transferPropInput2}>{swapDetails.recipient}</div>
                         </div>
 
                         <div className={style.formHeader}>
-                            <a
-                                href={swapDetails.mirrorTransactionLink}
-                                target="_blank"
-                            >
+                            <a href={swapDetails.mirrorTransactionLink} target="_blank">
                                 Swap ID
                             </a>
                         </div>
                         <div className={style.transferPropContainer}>
-                            <Link
-                                href={swapDetails.mirrorTransactionLink}
-                                target="_blank"
-                            >
-                                {swapDetails.mirrorSwapID}
+                            <Link href={swapDetails.mirrorTransactionLink} target="_blank">
+                                {"0x..." + swapDetails.mirrorSwapID.slice(-40)}
                             </Link>
                         </div>
                         {status === "closeable" && (
                             <div>
-                                <button
-                                    onClick={() => sendCloseSwapTransaction()}
-                                    className={style.swapButton}
-                                >
+                                <button onClick={() => sendCloseSwapTransaction()} className={style.swapButton}>
                                     Close Swap (with transaction)
                                 </button>
-                                {isUserOpSupported(
-                                    swapDetails.receivingChainID
-                                ) && (
-                                    <button
-                                        onClick={() => sendCloseSwapUserOp()}
-                                        className={style.swapButton}
-                                    >
+                                {isUserOpSupported(swapDetails.receivingChainID) && (
+                                    <button onClick={() => sendCloseSwapUserOp()} className={style.swapButton}>
                                         Close Swap (with userOp)
                                     </button>
                                 )}
                             </div>
                         )}
-                        {status === "closing" && (
-                            <div className={style.swapPassed}>
-                                Waiting for confirmation
-                            </div>
-                        )}
-                        {status === "closed" && (
-                            <div className={style.swapPassed}>Success</div>
-                        )}
+                        {status === "closing" && <div className={style.swapPassed}>Waiting for confirmation</div>}
+                        {status === "closed" && <div className={style.swapPassed}>Success</div>}
                         {status === "error" && (
                             <div>
-                                <button
-                                    onClick={() => sendCloseSwapUserOp()}
-                                    className={style.swapButton}
-                                >
+                                <button onClick={() => sendCloseSwapUserOp()} className={style.swapButton}>
                                     {swapDetails.error}
                                 </button>
-                                <button
-                                    onClick={() => sendCloseSwapTransaction()}
-                                    className={style.swapButton}
-                                >
+                                <button onClick={() => sendCloseSwapTransaction()} className={style.swapButton}>
                                     Close Swap (with transaction)
                                 </button>
                             </div>

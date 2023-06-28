@@ -12,7 +12,7 @@ const style = {
   container: `relative w-full cursor-default text-white border border-[#20242A] hover:border-[#41444F] rounded-2xl bg-[#20242A] py-4 pl-3 pr-10 text-left`,
 };
 
-const quantities = [{ amount: "0.001" }, { amount: "0.01" }, { amount: "0.1" }];
+const quantities = [{ amount: "0.002" }, { amount: "0.005" }, { amount: "0.01" }];
 
 const Quantity = () => {
   const { formData, handleChange } = useContext(TransactionContext);

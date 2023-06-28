@@ -9,7 +9,7 @@ const Home: NextPage = () => {
     <>
       <Head>
         <title>
-          Atomic Cloak - Privacy preserving cross-chain atomic swaps
+          Atmen Swap
         </title>
         <meta
           name="description"

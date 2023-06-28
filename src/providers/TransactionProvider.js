@@ -5,8 +5,10 @@ import { useRouter } from "next/router";
 import {
     supportedChains,
     TIME_LOCK,
-    contractABI,
-    contractAddress,
+    atmenSwapABI,
+    atmenSwapAddress,
+    ecCommitmentABI,
+    ecCommitmentAddress,
 } from "@/lib/constants";
 
 export const TransactionContext = React.createContext();
@@ -38,85 +40,41 @@ const getGasPrice = async (chainID) => {
     return gasPrice;
 };
 
-const getAtomicCloakContract = async (chainID) => {
+const getContracts = async (chainID) => {
     if (chainID) {
         const chain = supportedChains.find((chain) => chain.id === chainID);
         const provider = new ethers.providers.JsonRpcProvider(
             chain.rpcUrls.default.http[0]
         );
 
-        const transactionContract = new ethers.Contract(
-            contractAddress,
-            contractABI,
+        const atmenSwap = new ethers.Contract(
+            atmenSwapAddress,
+            atmenSwapABI,
             provider
         );
-        return transactionContract;
+        const ecCommit = new ethers.Contract(
+            ecCommitmentAddress,
+            ecCommitmentABI,
+            provider
+        );
+
+        return { atmenSwap, ecCommit };
     }
     const provider = new ethers.providers.Web3Provider(eth);
     const signer = provider.getSigner();
-    const address = contractAddress;
 
-    const transactionContract = new ethers.Contract(
-        address,
-        contractABI,
+    const atmenSwap = new ethers.Contract(
+        atmenSwapAddress,
+        atmenSwapABI,
         signer
     );
-    return transactionContract;
-};
+    const ecCommit = new ethers.Contract(
+        ecCommitmentAddress,
+        ecCommitmentABI,
+        signer
+    );
 
-const checkIfWalletIsConnected = async (metamask = eth) => {
-    try {
-        if (!metamask) return alert("Please install metamask ");
-        const accounts = await metamask.request({ method: `eth_accounts` });
-
-        if (accounts.length) {
-            setCurrentAccount(accounts[0]);
-            console.log("Wallet is already connected");
-        }
-    } catch (error) {
-        console.error(error);
-        throw new Error("No ethereum object.");
-    }
-};
-
-const switchNetwork = async (chainID) => {
-    checkIfWalletIsConnected();
-    const provider = new ethers.providers.Web3Provider(eth);
-    if (provider.network.chainId === chainID) return;
-
-    try {
-        await window.ethereum.request({
-            method: "wallet_switchEthereumChain",
-            params: [
-                {
-                    chainId: "0x" + parseInt(chainId).toString(16),
-                },
-            ],
-        });
-        console.log("You have switched to the right network");
-    } catch {
-        console.log("Please switch to the right network");
-        const chainData = getChainData(chainID);
-        try {
-            await window.ethereum.request({
-                method: "wallet_addEthereumChain",
-                params: [
-                    {
-                        chainId: "0x" + parseInt(chainId).toString(16),
-                        chainName: chainData.name,
-                        rpcUrls: chainData.rpcUrls.default.http,
-                        blockExplorerUrls: [
-                            chainData.blockExplorers.default.url,
-                        ],
-                        nativeCurrency: chainData.nativeCurrency,
-                    },
-                ],
-            });
-        } catch {
-            throw new Error("Failed to switch network");
-        }
-        switchNetwork(chainID);
-    }
+    return { atmenSwap, ecCommit };
 };
 
 export const TransactionProvider = ({ children }) => {
@@ -127,7 +85,7 @@ export const TransactionProvider = ({ children }) => {
     const [status, setStatus] = useState("new");
     const [formData, setFormData] = useState({
         recipient: "",
-        amount: "0.001",
+        amount: "0.002",
         receivingChainName: supportedChains[0].name,
     });
     const [swapDetails, setSwapDetails] = useState({
@@ -136,8 +94,6 @@ export const TransactionProvider = ({ children }) => {
         sharedSecret: "",
         qx1: "",
         qy1: "",
-        qx2: "",
-        qy2: "",
         sendingChainID: "",
         receivingChainID: "",
         recipient: "",
@@ -163,63 +119,96 @@ export const TransactionProvider = ({ children }) => {
         }));
     };
 
+    // to connect to the wallet
+    const connectWallet = async (metamask = eth) => {
+        try {
+            if (!metamask) return alert("Please install metamask ");
+
+            const accounts = await metamask.request({
+                method: "eth_requestAccounts",
+            });
+
+            setCurrentAccount(accounts[0]);
+        } catch (error) {
+            console.error(error);
+            throw new Error("No ethereum object.");
+        }
+    };
+
     // to check wallet connection
+    const checkIfWalletIsConnected = async (metamask = eth) => {
+        try {
+            if (!metamask) return alert("Please install metamask ");
+            const accounts = await metamask.request({ method: `eth_accounts` });
+
+            if (accounts.length) {
+                setCurrentAccount(accounts[0]);
+                console.log("Wallet is already connected");
+            }
+        } catch (error) {
+            console.error(error);
+            throw new Error("No ethereum object.");
+        }
+    };
 
     /* 
     to send transaction 
     */
-    const sendSwapProposal = async (metamask = eth) => {
+    const sendOpenSwapTransaction = async (
+        metamask = eth,
+        connectedAccount = currentAccount
+    ) => {
         console.log("sendOpenSwapTransaction");
-        if (!metamask) return alert("Please install metamask ");
-
-        const { recipient, amount, receivingChainName } = formData;
-
-        // get AtomicCloak contract
-        const atomicCloak = await getAtomicCloakContract();
-        const parsedAmount = ethers.utils.parseEther(amount);
-
-        const secretKey = ethers.utils.randomBytes(32);
-        console.log("secretKey: ", Buffer.from(secretKey).toString("hex"));
-        console.log("contract", atomicCloak);
-        const [qx1, qy1] = await atomicCloak.commitmentFromSecret(secretKey);
-        console.log("here");
-        const provider = new ethers.providers.Web3Provider(eth);
-        const blockNumBefore = await provider.getBlockNumber();
-        const blockBefore = await provider.getBlock(blockNumBefore);
-        const timestampBefore = blockBefore.timestamp;
-
-        const swapId = await atomicCloak.commitmentToAddress(qx1, qy1);
-        console.log("swapId:", swapId, "from", qx1, qy1);
-
-        const _sharedSecret = ethers.utils.randomBytes(32);
-        const [qx2, qy2] = await atomicCloak.commitmentFromSharedSecret(
-            qx1,
-            qy1,
-            _sharedSecret
-        );
-
-        const mirrorSwapID = await atomicCloak.commitmentToAddress(qx2, qy2);
-        const receivingChainID = supportedChains.find(
-            (chain) => chain.name === receivingChainName
-        ).id;
-        const _swapDetails = {
-            originalSwapID: swapId,
-            mirrorSwapID: mirrorSwapID,
-            sharedSecret: "0x" + Buffer.from(_sharedSecret).toString("hex"),
-            qx1: qx1._hex,
-            qy1: qy1._hex,
-            qx2: qx2._hex,
-            qy2: qy2._hex,
-            sendingChainID: provider.network.chainId,
-            receivingChainID: receivingChainID,
-            recipient: recipient,
-            secretKey: "0x" + Buffer.from(secretKey).toString("hex"),
-            originalSwapTimestamp: timestampBefore + 2 * TIME_LOCK, // initial swap has a longer timelock
-            mirrorSwapTimestamp: "",
-            value: ethers.utils.formatEther(parsedAmount),
-        };
-        setSwapDetails(_swapDetails);
         try {
+            if (!metamask) return alert("Please install metamask ");
+            const { recipient, amount, receivingChainName } = formData;
+
+            const { atmenSwap, ecCommit } = await getContracts();
+            const parsedAmount = ethers.utils.parseEther(amount);
+
+            const secretKey = ethers.utils.randomBytes(32);
+            console.log("secretKey: ", Buffer.from(secretKey).toString("hex"));
+            const [qx1, qy1] = await ecCommit.ecmul(
+                await ecCommit.gx(),
+                await ecCommit.gy(),
+                ethers.BigNumber.from(secretKey)
+            );
+
+            const swapID = await ecCommit.commitmentFromPoint(qx1, qy1);
+            console.log("swapID: ", swapID);
+
+            const provider = atmenSwap.provider;
+            const blockNumBefore = await provider.getBlockNumber();
+            const blockBefore = await provider.getBlock(blockNumBefore);
+            const timestampBefore = blockBefore.timestamp;
+
+            const sharedSecret = ethers.utils.randomBytes(32);
+            const mirrorSwapID = await ecCommit.commitmentFromSharedSecret(
+                qx1,
+                qy1,
+                sharedSecret
+            );
+            console.log("mirrorSwapID: ", mirrorSwapID);
+
+            const receivingChainID = supportedChains.find(
+                (chain) => chain.name === receivingChainName
+            ).id;
+            const _swapDetails = {
+                originalSwapID: swapID,
+                mirrorSwapID: mirrorSwapID,
+                sharedSecret: "0x" + Buffer.from(sharedSecret).toString("hex"),
+                qx1: qx1._hex,
+                qy1: qy1._hex,
+                sendingChainID: provider.network.chainId,
+                receivingChainID: receivingChainID,
+                recipient: recipient,
+                secretKey: "0x" + Buffer.from(secretKey).toString("hex"),
+                originalSwapTimestamp: timestampBefore + 2 * TIME_LOCK, // initial swap has a longer timelock
+                mirrorSwapTimestamp: "",
+                value: ethers.utils.formatEther(parsedAmount),
+            };
+            setSwapDetails(_swapDetails);
+
             await fetch(process.env.NEXT_PUBLIC_BACKEND_API + "/api/v1/swap", {
                 method: "POST",
                 headers: {
@@ -232,129 +221,155 @@ export const TransactionProvider = ({ children }) => {
                     sharedSecret: _swapDetails.sharedSecret,
                     qx1: _swapDetails.qx1,
                     qy1: _swapDetails.qy1,
-                    qx2: _swapDetails.qx2,
-                    qy2: _swapDetails.qy2,
-
                     sendingChainID: _swapDetails.sendingChainID,
                     receivingChainID: _swapDetails.receivingChainID,
                     recipient: recipient,
                 }),
             });
-            setStatus("proposed");
-        } catch (error) {
-            setIsLoading(false);
-            console.error(error);
-            return;
-        }
-    };
-    const sendOpenSwapTransaction = async (metamask = eth) => {
-        try {
-            const trs = await atomicCloak.openETHSwap(
-                qx1,
-                qy1,
-                process.env.NEXT_PUBLIC_BACKEND_ADDRESS, //FIXME: should not hardocde,
+            console.log("Swap saved to backend");
+            const trs = await atmenSwap.openETHSwap(
+                _swapDetails.originalSwapID,
                 _swapDetails.originalSwapTimestamp,
+                process.env.NEXT_PUBLIC_BACKEND_ADDRESS,
                 {
                     value: parsedAmount,
                 }
             );
+
+            setIsLoading(true);
+            await trs.wait();
+            _swapDetails.originalTransactionLink = getTransactionLink(
+                _swapDetails.sendingChainID,
+                trs.hash
+            );
+            setSwapDetails(_swapDetails);
+            setStatus("open");
+            //FIXME: links in page ond't work cause state is not updated at this point but only when function returns
+            console.log("Swap opened", _swapDetails);
+
+            const contracts = await getContracts(_swapDetails.receivingChainID);
+            const atmenSwapReceivingChain = contracts.atmenSwap;
+            atmenSwapReceivingChain.on("Open", async (_swapID, event) => {
+                console.log(
+                    "Open event received",
+                    _swapID,
+                    _swapDetails.mirrorSwapID
+                );
+                if (_swapID === _swapDetails.mirrorSwapID) {
+                    const commitmentTimelock =
+                        await atmenSwapReceivingChain.commitments(_swapID);
+
+                    _swapDetails.mirrorSwapTimestamp = commitmentTimelock;
+                    _swapDetails.mirrorTransactionLink = getTransactionLink(
+                        _swapDetails.receivingChainID,
+                        event.transactionHash
+                    );
+                    setSwapDetails(_swapDetails);
+                    setStatus("closeable");
+                    setIsLoading(false);
+                    atmenSwapReceivingChain.removeAllListeners(); //Maybe dangerous if several swaps open
+                }
+            });
         } catch (error) {
             setIsLoading(false);
             console.error(error);
-            return;
         }
-        setIsLoading(true);
-        await trs.wait();
-        _swapDetails.originalTransactionLink = getTransactionLink(
-            _swapDetails.sendingChainID,
-            trs.hash
-        );
-        setSwapDetails(_swapDetails);
-        setStatus("open");
-        //FIXME: links in page ond't work cause state is not updated at this point but only when function returns
-        console.log("Swap opened", _swapDetails);
-
-        const atomicCloakReceivingChain = await getAtomicCloakContract(
-            _swapDetails.receivingChainID
-        );
-        atomicCloakReceivingChain.on("Open", async (_swapID, event) => {
-            console.log(
-                "Open event received",
-                _swapID,
-                _swapDetails.mirrorSwapID
-            );
-            if (_swapID === _swapDetails.mirrorSwapID) {
-                const swapPublicData = await atomicCloakReceivingChain.swaps(
-                    _swapID
-                );
-                _swapDetails.mirrorSwapTimestamp = swapPublicData.timelock;
-                _swapDetails.mirrorTransactionLink = getTransactionLink(
-                    _swapDetails.receivingChainID,
-                    event.transactionHash
-                );
-                setSwapDetails(_swapDetails);
-                setStatus("closeable");
-                setIsLoading(false);
-                atomicCloakReceivingChain.removeAllListeners(); //Maybe dangerous if several swaps open
-            }
-        });
     };
 
     const sendCloseSwapTransaction = async () => {
         try {
-            switchNetwork(swapDetails.receivingChainID);
-        } catch (error) {
-            console.error(error);
+            await window.ethereum.request({
+                method: "wallet_switchEthereumChain",
+                params: [
+                    {
+                        chainId:
+                            "0x" +
+                            parseInt(swapDetails.receivingChainID).toString(16),
+                    },
+                ],
+            });
+            console.log("You have switched to the right network");
+        } catch (switchError) {
+            console.log("Please switch to the right network");
+            const chainData = getChainData(swapDetails.receivingChainID);
+            await window.ethereum.request({
+                method: "wallet_addEthereumChain",
+                params: [
+                    {
+                        chainId:
+                            "0x" +
+                            parseInt(swapDetails.receivingChainID).toString(16),
+                        chainName: chainData.name,
+                        rpcUrls: chainData.rpcUrls.default.http,
+                        blockExplorerUrls: [
+                            chainData.blockExplorers.default.url,
+                        ],
+                        nativeCurrency: chainData.nativeCurrency,
+                    },
+                ],
+            });
             return;
         }
 
-        const atomicCloak = await getAtomicCloakContract();
-        const curveOrder = await atomicCloak.curveOrder();
+        const { atmenSwap, ecCommit } = await getContracts();
+        const curveOrder = await ecCommit.q();
 
         let newSecretKey =
             BigInt(swapDetails.secretKey) + BigInt(swapDetails.sharedSecret);
         newSecretKey %= BigInt(curveOrder._hex);
-
-        const closeTrs = await atomicCloak.closeSwap(
+        console.log(
+            "newSecretKey: ",
             swapDetails.mirrorSwapID,
-            newSecretKey,
-            { gasLimit: 1000000 }
+            "0x" + newSecretKey.toString(16)
         );
-        setIsLoading(true);
-        setStatus("closing");
-        await closeTrs.wait();
-        setIsLoading(false);
-        setStatus("closed");
+        try {
+            const closeTrs = await atmenSwap.close(
+                swapDetails.mirrorSwapID,
+                "0x" + newSecretKey.toString(16),
+                { gasLimit: 1000000 }
+            );
+            setIsLoading(true);
+            setStatus("closing");
+            await closeTrs.wait();
+            setIsLoading(false);
+            setStatus("closed");
+        } catch (error) {
+            alert("Transaction failed: " + error.message);
+            setIsLoading(false);
+        }
     };
 
     const sendCloseSwapUserOp = async () => {
-        const atomicCloak = await getAtomicCloakContract(
+        const { atmenSwap, ecCommit } = await getContracts(
             swapDetails.receivingChainID
         );
-        const curveOrder = await atomicCloak.curveOrder();
+        const fieldOrder = BigInt(await ecCommit.q());
 
-        let newSecretKey =
-            BigInt(swapDetails.secretKey) + BigInt(swapDetails.sharedSecret);
-        newSecretKey %= BigInt(curveOrder._hex);
+        const modifiedSecret =
+            (BigInt(swapDetails.secretKey) + BigInt(swapDetails.sharedSecret)) %
+            fieldOrder;
 
-        const nonce = await atomicCloak.getNonce();
+        console.log(
+            "\n\nmodifiedSecret: ",
+            swapDetails.mirrorSwapID,
+            swapDetails.secretKey,
+            swapDetails.sharedSecret,
+            modifiedSecret.toString(16).padStart(64, "0")
+        );
 
-        let s = newSecretKey.toString(16).padStart(64, "0");
-        // while (s.length < 64) {
-        //     s = "0" + s;
-        // }
+        const nonce = await atmenSwap.getNonce();
 
         const userOp = {
-            sender: contractAddress,
+            sender: atmenSwapAddress,
             nonce: nonce.toString(),
             initCode: "0x",
             callData:
-                "0x685da727" +
-                swapDetails.mirrorSwapID.slice(2).padStart(64, "0") +
-                newSecretKey.toString(16).padStart(64, "0"),
-            callGasLimit: "0x214C10",
-            verificationGasLimit: "0x06E360",
-            preVerificationGas: "0x06E360", //fixme: sometimes is too low
+                swapDetails.mirrorSwapID +
+                `${modifiedSecret.toString(16).padStart(64, "0")}` +
+                "fc334e8c",
+            callGasLimit: "0x06E360",
+            verificationGasLimit: "0X00",
+            preVerificationGas: "0x00",
             maxFeePerGas: "0x06E360",
             maxPriorityFeePerGas: "0x6f",
             paymasterAndData: "0x",
@@ -362,9 +377,7 @@ export const TransactionProvider = ({ children }) => {
         };
 
         // estimate gas cost by running validateSignature_test
-        const preVerificationGas =
-            await atomicCloak.estimateGas.validateSignature_test(userOp);
-        //FIXME: better estimate overhead due to nonce
+
         const chain = supportedChains.find(
             (chain) => chain.id === swapDetails.receivingChainID
         );
@@ -373,18 +386,34 @@ export const TransactionProvider = ({ children }) => {
         );
         const feeData = await provider.getFeeData();
         console.log("feeData", feeData);
-        userOp.maxFeePerGas = feeData.maxFeePerGas._hex;
+
+        // userOp.maxFeePerGas = feeData.maxFeePerGas._hex;
+        // userOp.maxPriorityFeePerGas = feeData.maxPriorityFeePerGas._hex;
+        const preVerificationGas =
+            await atmenSwap.estimateGas.validateSignature_test(userOp);
+        console.log("preVerificationGas", preVerificationGas.toNumber());
         userOp.preVerificationGas =
-            "0x" +
-            Math.round(1.5 * preVerificationGas + 1000)
-                .toString(16)
-                .padStart(2, "0");
+            "0x" + (2 * preVerificationGas.toNumber() + 1000).toString(16);
+        userOp.verificationGasLimit = userOp.preVerificationGas;
+
+        //test if userOp is valid
+        const preVerificationTest = await atmenSwap.validateSignature_test(
+            userOp
+        );
+        console.log("preVerificationTest", preVerificationTest);
+
+        if (preVerificationTest !== true) {
+            setStatus("error");
+            swapDetails.error = "Error: preVerificationTest failed";
+            setSwapDetails(swapDetails);
+            return;
+        }
 
         const payload = {
             jsonrpc: "2.0",
             id: 1,
             method: "eth_sendUserOperation",
-            params: [userOp, "0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789"],
+            params: [userOp, process.env.NEXT_PUBLIC_ENTRY_POINT_ADDRESS],
         };
 
         console.log("payload", payload);
@@ -438,6 +467,7 @@ export const TransactionProvider = ({ children }) => {
         <TransactionContext.Provider
             value={{
                 currentAccount,
+                connectWallet,
                 sendCloseSwapTransaction,
                 sendOpenSwapTransaction,
                 sendCloseSwapUserOp,
